@@ -1,0 +1,14 @@
+{
+  "name": "bored-framework",
+  "authors": [
+    "Joe <joseph.fehrman@gmail.com>"
+  ],
+  "description": "Board game framework.",
+  "main": "",
+  "license": "MIT",
+  "homepage": "",
+  "private": true,
+  "dependencies": {
+    "qunit": "^2.1.1"
+  }
+}
