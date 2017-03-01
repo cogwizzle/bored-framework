@@ -1,0 +1,33 @@
+{
+  "name": "Extend",
+  "homepage": "https://github.com/jfehrman/extend",
+  "authors": [
+    "Joseph Fehrman <joseph.fehrman@gmail.com>"
+  ],
+  "description": "Javascript extend function used to easily allow for pseudo inheritance prior to ES6.",
+  "main": "/src/extend.js",
+  "keywords": [
+    "polyfill",
+    "sham",
+    "inheritance",
+    "class",
+    "microlibrary",
+    "library",
+    "facade",
+    "extends",
+    "javascript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "qunit": "^1.23.1"
+  },
+  "_release": "c92c8af01a",
+  "_resolution": {
+    "type": "commit",
+    "commit": "c92c8af01a1a1e20660e66c20fe7fae95bddeece"
+  },
+  "_source": "https://github.com/jfehrman/extend.git",
+  "_target": "c92c8af01a1a1e20660e66c20fe7fae95bddeece",
+  "_originalSource": "https://github.com/jfehrman/extend.git",
+  "_direct": true
+}

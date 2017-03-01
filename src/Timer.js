@@ -4,33 +4,26 @@
   @param mountPoint CSS selector.
   @param options Timer options.
   @see Chart.js
-  TODO Write unit test for this.
 
   @author Joseph Fehrman
   @since 27/02/2017
 */
 var Timer = function(mountPoint, options){
+  var opts = {
+    "remainingColor" : "red",
+    "usedColor" : "black",
+    "time" : 60,
+    "onComplete" : function(){}
+  }
+  opts = extend(opts, options);
+    
   // Set up options.
-  if(!options){
-    options = {};
-  }
-  var mount = mountPoint;
-  var rColor = "red";
-  if(options.remaining_color){
-    rColor = options.remaining_color;
-  }
-  var uColor = "black";
-  var time = 60;
-  if(options.time){
-    time = options.time;
-  }
-  var onComplete = function(){};
-  if(options.on_complete){
-    onComplete = options.on_complete;
+  if(options){
+    opts = extend(opts, options);
   }
 
   // Get the element.
-  var element = document.querySelector(mount);
+  var element = document.querySelector(mountPoint);
   ctx = element.getContext("2d");
   // Set up data to be drawn.
   var data = {
@@ -44,21 +37,25 @@ var Timer = function(mountPoint, options){
         },
         animation : 
           {
-            "duration" : eval(1000 * time),
-            "onComplete" : onComplete // After competed call function.
+            "duration" : eval(1000 * opts.time),
+            "onComplete" : opts.onComplete // After competed call function.
           }
       },
     data : {
       datasets : [{
-        data : [time, 0],
+        data : [opts.time, 0],
         backgroundColor : [
-          rColor,
-          uColor
+          opts.remainingColor,
+          opts.usedColor
         ],
       }]
     }
   };
   new Chart(ctx, data);
 
-  return element; // Return canvas element.
+  return {
+    "element" : element,
+    "context" : ctx,
+    "options" : opts
+  }
 }
