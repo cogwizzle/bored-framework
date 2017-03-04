@@ -38,7 +38,8 @@ var Timer = function(mountPoint, options){
         animation : 
           {
             "duration" : eval(1000 * opts.time),
-            "onComplete" : opts.onComplete // After competed call function.
+            "onComplete" : opts.onComplete, // After competed call function.
+            "easing" : "linear"
           }
       },
     data : {
