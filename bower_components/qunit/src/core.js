@@ -3,16 +3,26 @@ import { window, setTimeout } from "./globals";
 import equiv from "./equiv";
 import dump from "./dump";
 import Assert from "./assert";
-import Test, { test, skip, only, pushFailure, generateHash } from "./test";
+import Test, { test, skip, only, todo, pushFailure, generateHash } from "./test";
 import exportQUnit from "./export";
 
 import config from "./core/config";
 import { defined, extend, objectType, is, now } from "./core/utilities";
 import { registerLoggingCallbacks, runLoggingCallbacks } from "./core/logging";
 import { sourceFromStacktrace } from "./core/stacktrace";
-import "./core/onerror";
+
+import SuiteReport from "./reports/suite";
+
+import { on, emit } from "./events";
+import onError from "./core/onerror";
 
 const QUnit = {};
+const globalSuite = new SuiteReport();
+
+// The initial "currentModule" represents the global (or top-level) module that
+// is not explicitly defined by the user, therefore we add the "globalSuite" to
+// it since each module has a suiteReport associated with it.
+config.currentModule.suiteReport = globalSuite;
 
 var globalStartCalled = false;
 var runStarted = false;
@@ -28,6 +38,7 @@ QUnit.isLocal = !( defined.document && window.location.protocol !== "file:" );
 QUnit.version = "@VERSION";
 
 extend( QUnit, {
+	on,
 
 	// Call on start of module test to prepend name to all tests
 	module: function( name, testEnvironment, executeNow ) {
@@ -65,13 +76,16 @@ extend( QUnit, {
 				config.moduleStack.slice( -1 )[ 0 ] : null;
 			var moduleName = parentModule !== null ?
 				[ parentModule.name, name ].join( " > " ) : name;
+			var parentSuite = parentModule ? parentModule.suiteReport : globalSuite;
+
 			var module = {
 				name: moduleName,
 				parentModule: parentModule,
 				tests: [],
 				moduleId: generateHash( moduleName ),
 				testsRun: 0,
-				childModules: []
+				childModules: [],
+				suiteReport: new SuiteReport( name, parentSuite )
 			};
 
 			var env = {};
@@ -96,6 +110,8 @@ extend( QUnit, {
 
 	test: test,
 
+	todo: todo,
+
 	skip: skip,
 
 	only: only,
@@ -113,14 +129,18 @@ extend( QUnit, {
 			} else if ( config.autostart ) {
 				throw new Error( "Called start() outside of a test context when " +
 					"QUnit.config.autostart was true" );
-			} else if ( !defined.document && !config.pageLoaded ) {
-
-				// Starts from Node even if .load was not previously called
-				QUnit.load();
 			} else if ( !config.pageLoaded ) {
 
-				// The page isn't completely loaded yet, so bail out and let `QUnit.load` handle it
+				// The page isn't completely loaded yet, so we set autostart and then
+				// load if we're in Node or wait for the browser's load event.
 				config.autostart = true;
+
+				// Starts from Node even if .load was not previously called. We still return
+				// early otherwise we'll wind up "beginning" twice.
+				if ( !defined.document ) {
+					QUnit.load();
+				}
+
 				return;
 			}
 		} else {
@@ -162,7 +182,9 @@ extend( QUnit, {
 	stack: function( offset ) {
 		offset = ( offset || 0 ) + 2;
 		return sourceFromStacktrace( offset );
-	}
+	},
+
+	onError
 } );
 
 QUnit.pushFailure = pushFailure;
@@ -210,6 +232,7 @@ export function begin() {
 		}
 
 		// The test run is officially beginning now
+		emit( "runStart", globalSuite.start( true ) );
 		runLoggingCallbacks( "begin", {
 			totalTests: Test.count,
 			modules: modulesLog
@@ -256,6 +279,7 @@ function done() {
 	runtime = now() - config.started;
 	passed = config.stats.all - config.stats.bad;
 
+	emit( "runEnd", globalSuite.end( true ) );
 	runLoggingCallbacks( "done", {
 		failed: config.stats.bad,
 		passed: passed,

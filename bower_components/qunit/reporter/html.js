@@ -2,6 +2,13 @@ import QUnit from "../src/core";
 import { window, navigator } from "../src/globals";
 import "./urlparams";
 
+const stats = {
+	passedTests: 0,
+	failedTests: 0,
+	skippedTests: 0,
+	todoTests: 0
+};
+
 // Escape text for attribute or text content.
 export function escapeText( s ) {
 	if ( !s ) {
@@ -238,7 +245,7 @@ function applyUrlParams() {
 		modulesList = id( "qunit-modulefilter-dropdown-list" ).getElementsByTagName( "input" ),
 		filter = id( "qunit-filter-input" ).value;
 
-	for ( i = 0; i < modulesList.length; i++ )  {
+	for ( i = 0; i < modulesList.length; i++ ) {
 		if ( modulesList[ i ].checked ) {
 			selectedModules.push( modulesList[ i ].value );
 		}
@@ -428,7 +435,7 @@ function toolbarModuleFilter() {
 			allCheckbox.checked = false;
 			removeClass( allCheckbox.parentNode, "checked" );
 		}
-		for ( i = 0; i < modulesList.length; i++ )  {
+		for ( i = 0; i < modulesList.length; i++ ) {
 			item = modulesList[ i ];
 			if ( !evt ) {
 				toggleClass( item.parentNode, "checked", item.checked );
@@ -620,10 +627,18 @@ QUnit.done( function( details ) {
 	var banner = id( "qunit-banner" ),
 		tests = id( "qunit-tests" ),
 		abortButton = id( "qunit-abort-tests-button" ),
+		totalTests = stats.passedTests + stats.skippedTests + stats.todoTests + stats.failedTests,
 		html = [
-			"Tests completed in ",
+			totalTests,
+			" tests completed in ",
 			details.runtime,
-			" milliseconds.<br />",
+			" milliseconds, with ",
+			stats.failedTests,
+			" failed, ",
+			stats.skippedTests,
+			" skipped, and ",
+			stats.todoTests,
+			" todo.<br />",
 			"<span class='passed'>",
 			details.passed,
 			"</span> assertions of <span class='total'>",
@@ -654,7 +669,7 @@ QUnit.done( function( details ) {
 	}
 
 	if ( banner && ( !abortButton || abortButton.disabled === false ) ) {
-		banner.className = details.failed ? "qunit-fail" : "qunit-pass";
+		banner.className = stats.failedTests ? "qunit-fail" : "qunit-pass";
 	}
 
 	if ( abortButton ) {
@@ -670,7 +685,7 @@ QUnit.done( function( details ) {
 		// Show ✖ for good, ✔ for bad suite result in title
 		// use escape sequences in case file gets loaded with non-utf-8-charset
 		document.title = [
-			( details.failed ? "\u2716" : "\u2714" ),
+			( stats.failedTests ? "\u2716" : "\u2714" ),
 			document.title.replace( /^[\u2714\u2716] /i, "" )
 		].join( " " );
 	}
@@ -824,7 +839,10 @@ QUnit.testDone( function( details ) {
 	good = details.passed;
 	bad = details.failed;
 
-	if ( bad === 0 ) {
+	// This test passed if it has no unexpected failed assertions
+	let testPassed = details.failed > 0 ? details.todo : !details.todo;
+
+	if ( testPassed ) {
 
 		// Collapse the passing tests
 		addClass( assertList, "qunit-collapsed" );
@@ -851,6 +869,8 @@ QUnit.testDone( function( details ) {
 		details.assertions.length + ")</b>";
 
 	if ( details.skipped ) {
+		stats.skippedTests++;
+
 		testItem.className = "skipped";
 		skipped = document.createElement( "em" );
 		skipped.className = "qunit-skipped-label";
@@ -861,12 +881,27 @@ QUnit.testDone( function( details ) {
 			toggleClass( assertList, "qunit-collapsed" );
 		} );
 
-		testItem.className = bad ? "fail" : "pass";
+		testItem.className = testPassed ? "pass" : "fail";
+
+		if ( details.todo ) {
+			let todoLabel = document.createElement( "em" );
+			todoLabel.className = "qunit-todo-label";
+			todoLabel.innerHTML = "todo";
+			testItem.insertBefore( todoLabel, testTitle );
+		}
 
 		time = document.createElement( "span" );
 		time.className = "runtime";
 		time.innerHTML = details.runtime + " ms";
 		testItem.insertBefore( time, assertList );
+
+		if ( !testPassed ) {
+			stats.failedTests++;
+		} else if ( details.todo ) {
+			stats.todoTests++;
+		} else {
+			stats.passedTests++;
+		}
 	}
 
 	// Show the source of the test when showing assertions
@@ -874,7 +909,7 @@ QUnit.testDone( function( details ) {
 		sourceName = document.createElement( "p" );
 		sourceName.innerHTML = "<strong>Source: </strong>" + details.source;
 		addClass( sourceName, "qunit-source" );
-		if ( bad === 0 ) {
+		if ( testPassed ) {
 			addClass( sourceName, "qunit-collapsed" );
 		}
 		addEvent( testTitle, "click", function() {
@@ -895,5 +930,34 @@ if ( notPhantom && document.readyState === "complete" ) {
 } else {
 	addEvent( window, "load", QUnit.load );
 }
+
+// Wrap window.onerror. We will call the original window.onerror to see if
+// the existing handler fully handles the error; if not, we will call the
+// QUnit.onError function.
+var originalWindowOnError = window.onerror;
+
+// Cover uncaught exceptions
+// Returning true will suppress the default browser handler,
+// returning false will let it run.
+window.onerror = function( message, fileName, lineNumber, ...args ) {
+	var ret = false;
+	if ( originalWindowOnError ) {
+		ret = originalWindowOnError.call( this, message, fileName, lineNumber, ...args );
+	}
+
+	// Treat return value as window.onerror itself does,
+	// Only do our handling if not suppressed.
+	if ( ret !== true ) {
+		let error = {
+			message,
+			fileName,
+			lineNumber
+		};
+
+		ret = QUnit.onError( error );
+	}
+
+	return ret;
+};
 
 }() );

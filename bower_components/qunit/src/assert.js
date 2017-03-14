@@ -1,7 +1,7 @@
 import dump from "./dump";
 import equiv from "./equiv";
 import { internalStop } from "./test";
-import { console } from "./globals";
+import Logger from "./logger";
 
 import config from "./core/config";
 import { objectType, objectValues } from "./core/utilities";
@@ -13,6 +13,23 @@ class Assert {
 	}
 
 	// Assert helpers
+
+	// Documents a "step", which is a string value, in a test as a passing assertion
+	step( message ) {
+		let result = !!message;
+
+		this.test.steps.push( message );
+
+		return this.pushResult( {
+			result,
+			message: message || "You must provide a message to assert.step"
+		} );
+	}
+
+	// Verifies the steps in a test match a given array of string values
+	verifySteps( steps, message ) {
+		this.deepEqual( this.test.steps, steps, message );
+	}
 
 	// Specify the number of expected assertions to guarantee that failed test
 	// (no assertions are run at all) don't slip through.
@@ -57,7 +74,7 @@ class Assert {
 	// Exports test.push() to the user API
 	// Alias of pushResult.
 	push( result, actual, expected, message, negative ) {
-		console.warn( "assert.push is deprecated and will be removed in QUnit 3.0." +
+		Logger.warn( "assert.push is deprecated and will be removed in QUnit 3.0." +
 			" Please use assert.pushResult instead (http://api.qunitjs.com/pushResult/)." );
 
 		let currentAssert = this instanceof Assert ? this : config.current.assert;

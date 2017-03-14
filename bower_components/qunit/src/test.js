@@ -2,12 +2,15 @@ import global from "global";
 
 import { internalState, process, begin } from "./core";
 import { setTimeout, clearTimeout } from "./globals";
+import { emit } from "./events";
 import Assert from "./assert";
 
 import config from "./core/config";
 import { diff, extend, hasOwn, now, defined, inArray, objectType } from "./core/utilities";
 import { runLoggingCallbacks } from "./core/logging";
 import { extractStacktrace, sourceFromStacktrace } from "./core/stacktrace";
+
+import TestReport from "./reports/test";
 
 var unitSampler,
 	focused = false,
@@ -25,6 +28,12 @@ export default function Test( settings ) {
 	this.usedAsync = false;
 	this.module = config.currentModule;
 	this.stack = sourceFromStacktrace( 3 );
+	this.steps = [];
+
+	this.testReport = new TestReport( settings.testName, this.module.suiteReport, {
+		todo: settings.todo,
+		skip: settings.skip
+	} );
 
 	// Register unique strings
 	for ( i = 0, l = this.module.tests; i < l.length; i++ ) {
@@ -74,6 +83,7 @@ Test.prototype = {
 		for ( i = notStartedModules.length - 1; i >= 0; i-- ) {
 			startModule = notStartedModules[ i ];
 			startModule.stats = { all: 0, bad: 0, started: now() };
+			emit( "suiteStart", startModule.suiteReport.start( true ) );
 			runLoggingCallbacks( "moduleStart", {
 				name: startModule.name,
 				tests: startModule.tests
@@ -91,6 +101,7 @@ Test.prototype = {
 		this.testEnvironment = extend( {}, module.testEnvironment );
 
 		this.started = now();
+		emit( "testStart", this.testReport.start( true ) );
 		runLoggingCallbacks( "testStart", {
 			name: this.testName,
 			module: module.name,
@@ -214,6 +225,7 @@ Test.prototype = {
 			moduleName = module.name,
 			testName = this.testName,
 			skipped = !!this.skip,
+			todo = !!this.todo,
 			bad = 0,
 			storage = config.storage;
 
@@ -241,10 +253,12 @@ Test.prototype = {
 			}
 		}
 
+		emit( "testEnd", this.testReport.end( true ) );
 		runLoggingCallbacks( "testDone", {
 			name: testName,
 			module: moduleName,
 			skipped: skipped,
+			todo: todo,
 			failed: bad,
 			passed: this.assertions.length - bad,
 			total: this.assertions.length,
@@ -259,6 +273,7 @@ Test.prototype = {
 		} );
 
 		if ( module.testsRun === numberOfTests( module ) ) {
+			emit( "suiteEnd", module.suiteReport.end( true ) );
 			runLoggingCallbacks( "moduleDone", {
 				name: module.name,
 				tests: module.tests,
@@ -344,18 +359,19 @@ Test.prototype = {
 				expected: resultInfo.expected,
 				testId: this.testId,
 				negative: resultInfo.negative || false,
-				runtime: now() - this.started
+				runtime: now() - this.started,
+				todo: !!this.todo
 			};
 
 		if ( !resultInfo.result ) {
-			source = sourceFromStacktrace();
+			source = resultInfo.source || sourceFromStacktrace();
 
 			if ( source ) {
 				details.source = source;
 			}
 		}
 
-		runLoggingCallbacks( "log", details );
+		this.logAssertion( details );
 
 		this.assertions.push( {
 			result: !!resultInfo.result,
@@ -369,26 +385,34 @@ Test.prototype = {
 				sourceFromStacktrace( 2 ) );
 		}
 
-		var details = {
-			module: this.module.name,
-			name: this.testName,
+		this.assert.pushResult( {
 			result: false,
 			message: message || "error",
 			actual: actual || null,
-			testId: this.testId,
-			runtime: now() - this.started
-		};
+			expected: null,
+			source
+		} );
+	},
 
-		if ( source ) {
-			details.source = source;
-		}
-
+	/**
+	 * Log assertion details using both the old QUnit.log interface and
+	 * QUnit.on( "assertion" ) interface.
+	 *
+	 * @private
+	 */
+	logAssertion( details ) {
 		runLoggingCallbacks( "log", details );
 
-		this.assertions.push( {
-			result: false,
-			message: message
-		} );
+		let assertion = {
+			passed: details.result,
+			actual: details.actual,
+			expected: details.expected,
+			message: details.message,
+			stack: details.source,
+			todo: details.todo
+		};
+		this.testReport.pushAssertion( assertion );
+		emit( "assertion", assertion );
 	},
 
 	resolvePromise: function( promise, phase ) {
@@ -437,7 +461,7 @@ Test.prototype = {
 		}
 
 		function moduleChainIdMatch( testModule ) {
-			return inArray( testModule.moduleId, config.moduleId ) > -1 ||
+			return inArray( testModule.moduleId, config.moduleId ) ||
 				testModule.parentModule && moduleChainIdMatch( testModule.parentModule );
 		}
 
@@ -453,7 +477,7 @@ Test.prototype = {
 		}
 
 		if ( config.testId && config.testId.length > 0 &&
-			inArray( this.testId, config.testId ) < 0 ) {
+			!inArray( this.testId, config.testId ) ) {
 
 			return false;
 		}
@@ -623,11 +647,23 @@ export function test( testName, callback ) {
 		return;
 	}
 
-	var newTest;
-
-	newTest = new Test( {
+	let newTest = new Test( {
 		testName: testName,
 		callback: callback
+	} );
+
+	newTest.queue();
+}
+
+export function todo( testName, callback ) {
+	if ( focused ) {
+		return;
+	}
+
+	let newTest = new Test( {
+		testName,
+		callback,
+		todo: true
 	} );
 
 	newTest.queue();
@@ -639,7 +675,7 @@ export function skip( testName ) {
 		return;
 	}
 
-	var test = new Test( {
+	let test = new Test( {
 		testName: testName,
 		skip: true
 	} );
@@ -649,8 +685,6 @@ export function skip( testName ) {
 
 // Will be exposed as QUnit.only
 export function only( testName, callback ) {
-	var newTest;
-
 	if ( focused ) {
 		return;
 	}
@@ -658,7 +692,7 @@ export function only( testName, callback ) {
 	config.queue.length = 0;
 	focused = true;
 
-	newTest = new Test( {
+	let newTest = new Test( {
 		testName: testName,
 		callback: callback
 	} );

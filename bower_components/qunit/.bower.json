@@ -13,16 +13,15 @@
     "node_modules",
     "test"
   ],
-  "version": "2.1.1",
+  "version": "2.2.0",
   "homepage": "https://github.com/jquery/qunit",
-  "_release": "2.1.1",
+  "_release": "2.2.0",
   "_resolution": {
     "type": "version",
-    "tag": "2.1.1",
-    "commit": "677a0b50e77c9de22294b10d77414c38339d7225"
+    "tag": "2.2.0",
+    "commit": "ff5a3bd7ae4fa9fe511567281a57bbc7f3bf1dc9"
   },
   "_source": "https://github.com/jquery/qunit.git",
   "_target": "^2.1.1",
-  "_originalSource": "qunit",
-  "_direct": true
+  "_originalSource": "qunit"
 }
