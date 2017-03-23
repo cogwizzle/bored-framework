@@ -11,6 +11,6 @@
   "dependencies": {
     "qunit": "^2.1.1",
     "chart.js": "^2.5.0",
-    "Extend": "https://github.com/jfehrman/extend.git#c92c8af01a1a1e20660e66c20fe7fae95bddeece"
+    "Extend": "https://github.com/jfehrman/extend.git"
   }
 }
